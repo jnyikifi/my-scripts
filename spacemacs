@@ -8,4 +8,7 @@ docker run -ti --name spacemacs \
  -v /etc/machine-id:/etc/machine-id:ro \
  -v /var/run/dbus:/var/run/dbus \
  -v ${HOME}:/mnt/workspace \
+ -v ${HOME}/.local/share/spacemacs/home/emacs:/home/emacs \
+ -v ${HOME}/.gitconfig:/home/emacs/.gitconfig \
+ --rm \
  spacemacs/emacs25:develop

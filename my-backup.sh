@@ -5,9 +5,8 @@ dpkg-query -l > Documents/pkg.list
 
 borg create \
      --verbose \
-     --list \
      --stats \
-     --compression lz4 \
+     --compression zlib,6 \
      --exclude-caches \
      --exclude '.cache/*' \
      --exclude 'tmp/*' \

@@ -1,0 +1,203 @@
+#!/usr/bin/perl -w
+#
+# $Id: cvsmod,v 1.11 2000/07/12 08:30:51 knyberg Exp $
+#
+# Quick report about CVS files not up to date or modified.
+
+package cvsmod;
+use English;
+use FileHandle;
+use Getopt::Std;
+use strict;
+use Data::Dumper;
+use Env;
+
+#print Data::Dumper::Dumper \%ENV;
+#exit();
+
+
+# Initialise the variables
+
+@cvsmod::files = ();		# The files given on the command file
+$cvsmod::currFile = {};		# The current file
+$Getopt::Std::opt_a = 0;	# Initialize option -a variable
+$Getopt::Std::opt_h = 0;	# Initialize option -h variable 
+$Getopt::Std::opt_l = 0;	# Initialize option -l variable
+$Getopt::Std::opt_c = 0;	# Initialize option -c variable
+
+# Get the command line options
+
+Getopt::Std::getopts('ahlc');	# Library call, gets all options above
+if ($Getopt::Std::opt_h) {	# Print help message if asked for & exit
+    print <<"EOF";
+Usage: cvsmod [-h] [-l] [-a] [files ...]
+  -h  Print this help message
+  -l  Print in long format
+  -c  Print in compact format
+  -a  Print all files. Otherwise cvsmod leaves out the files that are 
+      up-to-date.
+EOF
+    exit;
+}
+
+# The main program
+
+runCvsStat();			# Get the output from the cvs status command
+if ($Getopt::Std::opt_l) {	# Check what output format to use
+    STDOUT->format_name("LONG");
+}				# The formats are defined after the code
+elsif ($Getopt::Std::opt_c) {
+    STDOUT->format_name("COMPACT");
+}
+else {
+    STDOUT->format_name("SHORT");
+}
+printFiles();			# The actual output
+
+
+# Take care of the printing, according to the command line options. If
+# option -a was selected, all files are printed out, otherwise only the
+# files that do not have the "up-to-date" status.
+
+sub printFiles {
+    foreach $cvsmod::currFile (@cvsmod::files) {
+	if ($Getopt::Std::opt_a) {
+	    write;
+	}
+	else {
+	    write if !($cvsmod::currFile->{"status"} =~ /up-to-date/i);
+	}
+    }
+}
+
+# Runs cvs status, captures the output and parses the output into a
+# hash structure.
+
+sub runCvsStat {
+    open(CVSSTAT, "cvs status @ARGV 2>/dev/null |");
+    $cvsmod::currFile = {};	# Emty the hash
+    while (<CVSSTAT>) {
+	next if /^$/;		# Skip empty lines
+	if (/^===/) {		# New file encountered, empty hash structure
+	    $cvsmod::currFile = {};
+	    next;
+	}
+	elsif (/^File: (.*)\s+Status: (\w+.*)/) { # First line containing data
+	    $cvsmod::currFile->{"name"} = $1;
+	    $cvsmod::currFile->{"status"} = $2;
+	    $cvsmod::currFile->{"workrev"} = "none";
+	    $cvsmod::currFile->{"date"} = "none";
+	    $cvsmod::currFile->{"reprev"} = "none";
+	    $cvsmod::currFile->{"repfile"} = "none";
+            $cvsmod::currFile->{"fileAndPath"} = $cvsmod::currFile->{"name"};
+	    push (@cvsmod::files, $cvsmod::currFile);
+	    next;
+	}
+	elsif (/Working revision:\s+(\d\S*)\s+(\w.*)/) {
+	    $cvsmod::currFile->{"workrev"} = $1;
+	    $cvsmod::currFile->{"date"} = $2;
+	    next;
+	}
+	elsif (/Repository revision:\s+(\d\S*)\s+(\/\w+.*)/) {
+	    $cvsmod::currFile->{"reprev"} = $1;
+	    $cvsmod::currFile->{"repfile"} = $2;
+            if ($cvsmod::currFile->{"repfile"} eq "none") {
+                $cvsmod::currFile->{"fileAndPath"} = 
+                    $cvsmod::currFile->{"name"};
+            }
+            else {
+                $cvsmod::currFile->{"fileAndPath"} = 
+                    $cvsmod::currFile->{"repfile"};
+            }
+            $cvsmod::currFile->{"fileAndPath"} =~ s/$ENV{CVSROOT}\///;
+            $cvsmod::currFile->{"fileAndPath"} =~ s/,v$//;
+	    next;
+	}
+	elsif (/Sticky Tag:\s+(\(none\)|\S+)/) {
+	    $cvsmod::currFile->{"stickyTag"} = $1;
+	    next;
+	}
+	elsif (/Sticky Date:\s+(\(none\)|\S+)/) {
+	    $cvsmod::currFile->{"stickyDate"} = $1;
+	    next;
+	}
+	next;
+    }
+}
+
+format LONG =
+
+File: @<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< Status: @<<<<<<<<<<<<<<<<<<<
+  $cvsmod::currFile->{"name"},                $cvsmod::currFile->{"status"}
+  Date: @<<<<<<<<<<<<<<<<<<<<<<<<< Revision: @<<<<<<<  Repository rev: @<<<<<<<
+  $cvsmod::currFile->{"date"}, $cvsmod::currFile->{"workrev"}, $cvsmod::currFile->{"reprev"}
+  Path: @<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+  $cvsmod::currFile->{"repfile"}
+.
+
+format SHORT = 
+File: @<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< Status: @<<<<<<<<<<<<<<<<<<<<<<
+      $cvsmod::currFile->{"name"},                $cvsmod::currFile->{"status"}
+.
+
+format COMPACT =
+@>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>  Stat: @<<<<<<<<<<<<<<<<<<<<<< STag: @<<<<<<<<<<<<<<<<<<<<<<<< SDate: @<<<<<<<<<<
+$cvsmod::currFile->{"fileAndPath"}, $cvsmod::currFile->{"status"}, $cvsmod::currFile->{"stickyTag"}, $cvsmod::currFile->{"stickyDate"}
+.
+
+#
+# Documentation
+#
+
+=pod
+
+=head1 NAME
+
+cvsmod - Compact listings from cvs status output
+
+=head1 SYNOPSIS
+
+C<cvsmod I<[-h] [-l] [-a] [files...]>>
+
+=over 4
+
+=item -h
+
+Print a help message.
+
+=item -l
+
+Produce listings in a longer format. In addition to file name and
+status, print the date, working revision, repository revision and full
+path to the repository file.
+
+=item -c
+
+Produce listings in a compact format. In addition to file name and
+status, print the sticky tag and sticky date
+
+=item -a
+
+Print information about all files. Otherwise, cvsmod leaves out the
+files that are up-to-date from the output.
+
+=item files
+
+Only check the files given on the command line.
+
+=back
+
+Note that if there are errors or warnings, they might be printed in
+front of the actual output.
+
+=head1 DESCRIPTION
+
+cvsmod runs cvs status in the current directory and generates a more
+compact report than the plain cvs status. By default, cvsmod only
+prints information about files that have changed.
+
+=head1 AUTHOR
+
+Kristoffer Nyberg, $Date: 2000/07/12 08:30:51 $
+
+=cut

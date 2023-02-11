@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import random
 import sys
@@ -16,8 +16,8 @@ if __name__ == '__main__':
         rows = int(sys.argv[1])
     else:
         rows = 1
-    print "Lotto, " + str(rows) + " rows"
+    print("Lotto, " + str(rows) + " rows")
     for line in range(0, rows):
         for num in sorted(get_numbers(40)):
             sys.stdout.write(num)
-        print
+        print()

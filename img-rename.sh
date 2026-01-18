@@ -8,5 +8,5 @@ for file in $*; do
     out_model=`echo $exif_model | sed 's/:/-/g; s/ /_/g;'`
     out_ext=`echo $file | perl -pe 's/^.*\.(\w+)$/$1/'`
     echo "mv -v $file ${out_datetime}_${out_model}_${out_num}.${out_ext}"
-    `mv -v $file ${out_datetime}_${out_model}_${out_num}.${out_ext}`
+    mv -v "$file" "${out_datetime}_${out_model}_${out_num}.${out_ext}"
 done
